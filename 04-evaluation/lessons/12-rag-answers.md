@@ -28,7 +28,7 @@ Load the ground truth questions:
 ```python
 import pandas as pd
 
-df_ground_truth = pd.read_csv("data/ground-truth-data.csv")
+df_ground_truth = pd.read_csv("data/ground_truth-new.csv")
 ground_truth = df_ground_truth.to_dict(orient="records")
 ```
 
@@ -38,6 +38,14 @@ Load the FAQ documents and the search index:
 from ingest import load_faq_data, build_index
 
 documents = load_faq_data()
+
+documents_llm = []
+
+for doc in documents:
+    if doc["course"] == "llm-zoomcamp":
+        documents_llm.append(doc)
+
+documents = documents_llm
 index = build_index(documents)
 ```
 
@@ -55,17 +63,29 @@ ground truth question.
 
 ## Running RAG
 
-Use the same `RAGBase` helper from module 01:
+Import the usual things first:
 
 ```python
 from dotenv import load_dotenv
 from openai import OpenAI
-from rag_helper import RAGBase
 
 load_dotenv()
 openai_client = OpenAI()
+```
 
-assistant = RAGBase(
+For this lesson, use `RAGWithUsage` from the evaluation utilities. It
+subclasses `RAGBase` from module 01, so it has the same `rag` method.
+
+It stores token usage after each LLM call. Then we can calculate the
+total cost later.
+
+It also uses the search boosts we selected in the search tuning lesson:
+`question=1.0`, `answer=2.0`, and `section=0.1`.
+
+```python
+from evaluation_utils import RAGWithUsage
+
+assistant = RAGWithUsage(
     index=index,
     llm_client=openai_client,
 )
@@ -85,34 +105,10 @@ answer_llm = assistant.rag(question)
 answer_llm
 ```
 
-The `rag` method returns the answer, but it doesn't return token usage.
-
-For this notebook, use a small wrapper that returns both:
+Check the cost of this call:
 
 ```python
-def rag_with_usage(question):
-    search_results = assistant.search(question)
-    prompt = assistant.build_prompt(question, search_results)
-
-    messages = [
-        {"role": "developer", "content": assistant.instructions},
-        {"role": "user", "content": prompt}
-    ]
-
-    response = openai_client.responses.create(
-        model=assistant.model,
-        input=messages
-    )
-
-    return response.output_text, response.usage
-```
-
-Test it:
-
-```python
-answer_llm, usage = rag_with_usage(question)
-
-answer_llm
+assistant.total_cost()
 ```
 
 Get the original answer from the document ID:
@@ -138,21 +134,6 @@ rag_result = {
 rag_result
 ```
 
-Calculate the price from `response.usage`, using the helper from the
-ground truth generation notebook.
-
-Import it:
-
-```python
-from evaluation_utils import calc_price
-```
-
-Check the cost of one call:
-
-```python
-calc_price(usage)
-```
-
 ## Processing all questions
 
 Create a function that processes one ground truth record:
@@ -163,7 +144,7 @@ def generate_rag_answer(rec):
     doc_id = rec["document"]
     original_doc = doc_idx[doc_id]
 
-    answer_llm, usage = rag_with_usage(question)
+    answer_llm = assistant.rag(question)
     answer_orig = original_doc["answer"]
 
     result = {
@@ -173,21 +154,21 @@ def generate_rag_answer(rec):
         "document": doc_id,
     }
 
-    return result, usage
+    return result
 ```
 
 Test it on one record:
 
 ```python
-answer_record, usage = generate_rag_answer(ground_truth[0])
-
+answer_record = generate_rag_answer(ground_truth[0])
 answer_record
 ```
 
-And check the cost:
+Before running the full batch, reset the usage we collected while
+testing:
 
 ```python
-calc_price(usage)
+assistant.reset_usage()
 ```
 
 This calls the LLM once per ground truth question, so it can take some
@@ -207,53 +188,42 @@ with ThreadPoolExecutor(max_workers=6) as pool:
     results = map_progress(pool, ground_truth, generate_rag_answer)
 ```
 
-`generate_rag_answer` returns two things for each question: the answer
-record and the token usage.
+`generate_rag_answer` returns one answer record for each question.
 
-Split those into separate lists:
+Collect the answer records:
 
 ```python
 answers = []
-usages = []
 
-for answer_record, usage in results:
+for answer_record in results:
     answers.append(answer_record)
-    usages.append(usage)
 ```
 
 Calculate the total cost:
 
 ```python
-total_cost = 0.0
-
-for usage in usages:
-    cost = calc_price(usage)
-    total_cost = total_cost + cost["total_cost"]
-
-total_cost
+assistant.total_cost()
 ```
 
 Save the answers:
 
 ```python
 df_answers = pd.DataFrame(answers)
-df_answers.to_csv("data/rag-answers.csv", index=False)
+df_answers.to_csv("data/rag-answers-new.csv", index=False)
 ```
 
-We generated this file for the course materials on May 28, 2026. The
+We generated this file for the course materials on May 29, 2026. The
 run used 395 ground truth questions.
 
-The token usage was:
-
-- Input tokens: 282,544
-- Output tokens: 24,339
-- Cost with the prices above: $0.321433, about 32 cents
+The total cost was $0.34332825, about 34 cents.
 
 If you don't want to generate the RAG answers yourself, download the
 file we prepared:
 
 ```bash
-wget -O data/rag-answers.csv https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main/04-evaluation/data/rag-answers.csv
+PREFIX=https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main
+
+wget -O data/rag-answers-new.csv ${PREFIX}/04-evaluation/data/rag-answers-new.csv
 ```
 
 In the next lesson, we'll evaluate these answers with an LLM judge.

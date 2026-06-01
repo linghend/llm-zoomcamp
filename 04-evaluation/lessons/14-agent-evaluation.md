@@ -19,7 +19,7 @@ Use the same ground truth questions:
 ```python
 import pandas as pd
 
-df_ground_truth = pd.read_csv("data/ground-truth-data.csv")
+df_ground_truth = pd.read_csv("data/ground_truth-new.csv")
 ground_truth = df_ground_truth.to_dict(orient="records")
 ```
 
@@ -29,6 +29,14 @@ Load the FAQ documents and the search index:
 from ingest import load_faq_data, build_index
 
 documents = load_faq_data()
+
+documents_llm = []
+
+for doc in documents:
+    if doc["course"] == "llm-zoomcamp":
+        documents_llm.append(doc)
+
+documents = documents_llm
 index = build_index(documents)
 ```
 
@@ -51,7 +59,7 @@ First, set up the model clients:
 ```python
 from dotenv import load_dotenv
 from openai import OpenAI
-from toyaikit.llm import OpenAIClient as ToyOpenAIClient
+from toyaikit.llm import OpenAIClient
 
 load_dotenv()
 openai_client = OpenAI()
@@ -67,7 +75,7 @@ def search(query: str) -> list[dict]:
     return index.search(
         query,
         num_results=5,
-        boost_dict={"question": 3.0, "section": 0.5},
+        boost_dict={"question": 1.0, "answer": 2.0, "section": 0.1},
         filter_dict={"course": "llm-zoomcamp"}
     )
 ```
@@ -89,7 +97,7 @@ the FAQ search results. Use the search tool before answering.
 runner = OpenAIResponsesRunner(
     tools=agent_tools,
     developer_prompt=instructions,
-    llm_client=ToyOpenAIClient(model="gpt-5.4-mini")
+    llm_client=OpenAIClient(model="gpt-5.4-mini")
 )
 ```
 
@@ -236,7 +244,7 @@ df_agent.to_csv("data/agent-answers.csv", index=False)
 Now we have the same A->Q->A' data as before, plus the tool calls for
 each agent run.
 
-We generated this file for the course materials on May 28, 2026. The
+We generated this file for the course materials on May 29, 2026. The
 run used 50 ground truth questions. ToyAIKit tracks the agent cost for
 each run, so we can sum the `cost` column directly.
 
@@ -246,7 +254,8 @@ If you don't want to run the agent yourself, download the file we
 prepared:
 
 ```bash
-wget -O data/agent-answers.csv https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main/04-evaluation/data/agent-answers.csv
+PREFIX=https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main
+wget -O data/agent-answers.csv ${PREFIX}/04-evaluation/data/agent-answers.csv
 ```
 
 Then load it:
@@ -351,7 +360,7 @@ Define the judge function:
 
 ```python
 import json
-from evaluation_utils import calc_price, llm_structured
+from evaluation_utils import calc_total_price, llm_structured_retry
 
 def evaluate_agent_answer(rec, model="gpt-5.4-mini"):
     tool_calls = rec["tool_calls"]
@@ -366,7 +375,7 @@ def evaluate_agent_answer(rec, model="gpt-5.4-mini"):
         tool_calls=json.dumps(tool_calls, indent=2),
     )
 
-    result, usage = llm_structured(
+    result, usage = llm_structured_retry(
         openai_client,
         agent_judge_instructions,
         prompt,
@@ -438,13 +447,7 @@ df_agent_eval = pd.DataFrame(agent_evaluations)
 Calculate the judge cost from the token usage:
 
 ```python
-total_cost = 0.0
-
-for usage in usages:
-    cost = calc_price(usage)
-    total_cost = total_cost + cost["total_cost"]
-
-total_cost
+calc_total_price(usages)
 ```
 
 Check the answer scores:
@@ -465,7 +468,7 @@ Save the judge results:
 df_agent_eval.to_csv("data/agent-evaluations.csv", index=False)
 ```
 
-We generated this file for the course materials on May 28, 2026. The
+We generated this file for the course materials on May 29, 2026. The
 run judged 50 agent answers.
 
 The answer scores were:
@@ -488,7 +491,9 @@ If you don't want to run the judge yourself, download the file we
 prepared:
 
 ```bash
-wget -O data/agent-evaluations.csv https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main/04-evaluation/data/agent-evaluations.csv
+PREFIX=https://raw.githubusercontent.com/DataTalksClub/llm-zoomcamp/main
+
+wget -O data/agent-evaluations.csv ${PREFIX}/04-evaluation/data/agent-evaluations.csv
 ```
 
 [← LLM as a Judge](13-llm-as-judge.md) | [Next Steps →](15-next-steps.md)

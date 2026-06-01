@@ -19,7 +19,7 @@ Load the ground truth file from the previous notebook:
 ```python
 import pandas as pd
 
-df_ground_truth = pd.read_csv("data/ground-truth-data.csv")
+df_ground_truth = pd.read_csv("data/ground_truth-new.csv")
 ground_truth = df_ground_truth.to_dict(orient="records")
 ```
 
@@ -31,6 +31,14 @@ Load the documents and build a minsearch index:
 from ingest import load_faq_data, build_index
 
 documents = load_faq_data()
+
+documents_llm = []
+
+for doc in documents:
+    if doc["course"] == "llm-zoomcamp":
+        documents_llm.append(doc)
+
+documents = documents_llm
 index = build_index(documents)
 ```
 
@@ -40,13 +48,11 @@ compare it with other search functions.
 ```python
 def text_search(query):
     boost_dict = {"question": 3.0, "section": 0.5}
-    filter_dict = {"course": "llm-zoomcamp"}
 
     return index.search(
         query,
         num_results=5,
-        boost_dict=boost_dict,
-        filter_dict=filter_dict,
+        boost_dict=boost_dict
     )
 ```
 
@@ -70,7 +76,7 @@ First, compare the retrieved document IDs with the correct document ID:
 
 ```python
 for d in results:
-    print(d["id"], doc_id, d["id"] == doc_id)
+    print(f'{d["id"]} == {doc_id}: {d["id"] == doc_id}')
 ```
 
 Then turn this comparison into a relevance list. In this lesson,
@@ -107,13 +113,7 @@ For the first ground truth record, the relevance list is:
 
 ```python
 q = ground_truth[0]
-q["question"]
-# 'Can I take this course at my own pace and still receive a certificate at the end?'
-```
-
-Compute relevance for it:
-
-```python
+print(q["question"])
 compute_relevance_text(q)
 # [1, 0, 0, 0, 0]
 ```
@@ -126,29 +126,23 @@ For this question:
 
 ```python
 q = ground_truth[11]
-q["question"]
-# 'If I sign up late, what do I need to do in order to still earn the course certificate?'
-
+print(q["question"])
 compute_relevance_text(q)
-# [0, 0, 1, 0, 0]
+# [1, 0, 0, 0, 0]
 ```
 
-Here, the first two retrieved documents are not correct. The third
-retrieved document has the same ID as the ground truth document, so the
-`1` is in position 3.
+Here, the correct document was also the first search result.
 
 For this question:
 
 ```python
-q = ground_truth[12]
-q["question"]
-# 'Is it okay to start the course after it has already begun, or is there a deadline for joining?'
-
+q = ground_truth[50]
+print(q["question"])
 compute_relevance_text(q)
-# [0, 0, 0, 0, 0]
+# [1, 0, 0, 0, 0]
 ```
 
-The correct document was not found at all.
+The correct document was found at the first position again.
 
 Now do the same thing for all ground truth questions:
 
@@ -165,13 +159,44 @@ def compute_relevance_total_text(ground_truth):
     return relevance_total
 ```
 
-Call it for the ground truth dataset:
+Call it for the first 15 ground truth questions:
 
 ```python
-relevance_total = compute_relevance_total_text(ground_truth)
+ground_truth_sample = ground_truth[:15]
+relevance_total_text = compute_relevance_total_text(ground_truth_sample)
 ```
 
-Each entry in `relevance_total` is a relevance list.
+Look at the results:
+
+```python
+relevance_total_text
+```
+
+For the data we prepared on May 29, 2026, this gives:
+
+```python
+[
+    [1, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [0, 0, 1, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0],
+]
+```
+
+Each entry in `relevance_total_text` is a relevance list. This is
+enough to check that the function works before we run it for the full
+dataset.
 
 Next, make the relevance functions generic. We start with text search,
 but later we may want to evaluate vector search, hybrid search, or
@@ -181,7 +206,7 @@ search function changes.
 ```python
 def compute_relevance(q, search_function):
     doc_id = q["document"]
-    results = search_function(q["question"])
+    results = search_function(query=q["question"])
 
     relevance = []
     for d in results:
@@ -205,7 +230,14 @@ def compute_relevance_total(ground_truth, search_function):
     return relevance_total
 ```
 
-Use it with `text_search`:
+Use it with `text_search` on the same sample:
+
+```python
+relevance_total = compute_relevance_total(ground_truth_sample, text_search)
+relevance_total
+```
+
+Now run it for all ground truth questions:
 
 ```python
 relevance_total = compute_relevance_total(ground_truth, text_search)

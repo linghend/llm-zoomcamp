@@ -17,29 +17,139 @@ Start with a search function where the question boost is configurable:
 ```python
 def search_boost(query, question_boost):
     boost_dict = {"question": question_boost, "section": 0.5}
-    filter_dict = {"course": "llm-zoomcamp"}
 
     return index.search(
         query,
         num_results=5,
         boost_dict=boost_dict,
-        filter_dict=filter_dict,
     )
 ```
 
 Evaluate several boost values:
 
 ```python
-for boost in [1.0, 3.0, 5.0, 10.0]:
+for boost in [0.5, 1.0, 3.0, 5.0, 10.0]:
     result = evaluate(
         ground_truth,
-        lambda q: search_boost(q["question"], boost)
+        lambda query, boost=boost: search_boost(query, boost)
     )
     print(f"boost={boost}: {result}")
 ```
 
-Compare the printed Hit Rate and MRR values. The best setting is the
-one that gives the strongest metrics on the ground truth data.
+For the data we prepared on May 29, 2026, this gives:
+
+```python
+boost=0.5: {'hit_rate': 0.9113924050632911, 'mrr': 0.800548523206751}
+boost=1.0: {'hit_rate': 0.9240506329113924, 'mrr': 0.8139240506329113}
+boost=3.0: {'hit_rate': 0.8987341772151899, 'mrr': 0.7693248945147676}
+boost=5.0: {'hit_rate': 0.8708860759493671, 'mrr': 0.7401265822784809}
+boost=10.0: {'hit_rate': 0.8582278481012658, 'mrr': 0.7122362869198313}
+```
+
+Increasing only the question boost makes the metrics worse. The best
+value from this list is `1.0`.
+
+But this is only one parameter. We can also tune `answer` and `section`
+together with `question`.
+
+Define a search function with all three boosts:
+
+```python
+def search_boosts(query, question_boost, answer_boost, section_boost):
+    boost_dict = {
+        "question": question_boost,
+        "section": section_boost,
+        "answer": answer_boost,
+    }
+
+    return index.search(
+        query,
+        num_results=5,
+        boost_dict=boost_dict,
+    )
+```
+
+Now do a small grid search:
+
+```python
+results = []
+
+for question_boost in [1.0, 2.0, 5.0]:
+    for answer_boost in [1.0, 2.0, 4.0, 10.0]:
+        for section_boost in [0.1, 0.2, 0.5]:
+            result = evaluate(
+                ground_truth,
+                lambda query, question_boost=question_boost, answer_boost=answer_boost, section_boost=section_boost: search_boosts(
+                    query,
+                    question_boost,
+                    answer_boost,
+                    section_boost
+                )
+            )
+
+            results.append({
+                "question": question_boost,
+                "answer": answer_boost,
+                "section": section_boost,
+                "hit_rate": result["hit_rate"],
+                "mrr": result["mrr"],
+            })
+```
+
+Sort by MRR:
+
+```python
+df_results = pd.DataFrame(results)
+df_results.sort_values("mrr", ascending=False).head(10)
+```
+
+For the same data, the best rows are:
+
+```text
+question  answer  section  hit_rate  mrr
+1.0       2.0     0.1      0.975     0.885
+2.0       4.0     0.2      0.975     0.885
+5.0       10.0    0.5      0.975     0.885
+5.0       10.0    0.2      0.975     0.884
+5.0       10.0    0.1      0.975     0.884
+2.0       4.0     0.1      0.975     0.884
+2.0       4.0     0.5      0.977     0.884
+1.0       2.0     0.2      0.977     0.884
+1.0       2.0     0.5      0.965     0.862
+1.0       4.0     0.1      0.970     0.862
+```
+
+The question-only experiment showed that `question_boost=1.0` was best
+when `answer` wasn't boosted. The grid search shows that the best
+combination is different once we tune the fields together.
+
+The first three rows have the same relative weights:
+
+```text
+question : answer : section = 1 : 2 : 0.1
+```
+
+So we can use the smaller and easier-to-read values:
+`question=1.0`, `answer=2.0`, and `section=0.1`. This gives the same
+relative weights as `question=5.0`, `answer=10.0`, and `section=0.5`,
+but the numbers are not unnecessarily large.
+
+Define the search function with these boosts:
+
+```python
+def text_search(query):
+    boost_dict = {
+        "question": 1.0,
+        "answer": 2.0,
+        "section": 0.1,
+    }
+
+    return index.search(
+        query,
+        num_results=5,
+        boost_dict=boost_dict,
+    )
+```
 
 Usually we care about both metrics. Hit Rate tells us whether the
 correct document appears at all. MRR tells us whether it appears near
@@ -52,14 +162,10 @@ Search parameters can look arbitrary. This includes field boosts,
 number of results, filters, and other settings. Evaluation gives us a
 way to compare settings with evidence.
 
-The same pattern works for other search changes:
-
-- different field boosts
-- different `num_results` values
-- text search vs vector search
-- hybrid search
-
-Each time, define a search function and pass it to `evaluate`.
+Grid search is fine when there are only a few settings. For a larger
+parameter space, use a smarter search strategy. You can sample random
+combinations, use Bayesian optimization, or keep a validation split so
+you don't overfit the evaluation set.
 
 Next, we'll move from retrieval quality to answer quality and evaluate
 the full RAG pipeline.
