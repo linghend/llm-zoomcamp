@@ -21,7 +21,7 @@ class RAGBase:
     def __init__(
         self,
         index,  #need by search()
-        llm_client,  #need by llm() from rag()
+        llm_client,  # needed by llm() from rag()
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
         course='llm-zoomcamp', #need by search()
