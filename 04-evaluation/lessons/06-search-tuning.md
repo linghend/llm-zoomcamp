@@ -1,14 +1,21 @@
 # Search Parameter Tuning
 
+Video: [Watch this lesson](https://www.youtube.com/watch?v=rSBSS_kCYN0&list=PL3MmuxUbc_hLZFNgSad56pDBKK8KO0XIv)
+
 In the previous lesson, we defined Hit Rate, MRR, and the `evaluate`
 function. Now we can use them to tune search parameters.
 
 Instead of guessing which settings are better, we measure them on the
 ground truth dataset.
 
-This is the main benefit of offline evaluation. We can change one
-parameter, run the same questions again, and see whether the metric
-improves. The dataset stays fixed, so the comparison is fair.
+So far we've boosted `question` to 3.0. The idea was that a query should
+match the FAQ question. That kind of match should count for more than
+matching the answer text. It sounds reasonable. But it's a guess, and now
+we can check it against data instead of trusting it.
+
+This is the main benefit of offline evaluation. We change one parameter,
+run the same questions again, and see whether the metric moves. The
+dataset stays fixed, so the comparison is fair.
 
 ## Trying different boosts
 
@@ -46,8 +53,9 @@ boost=5.0: {'hit_rate': 0.8708860759493671, 'mrr': 0.7401265822784809}
 boost=10.0: {'hit_rate': 0.8582278481012658, 'mrr': 0.7122362869198313}
 ```
 
-Increasing only the question boost makes the metrics worse. The best
-value from this list is `1.0`.
+Increasing the question boost makes the metrics worse, not better. The
+best value here is `1.0`, no boost at all. That's already the opposite of
+what the intuition predicted.
 
 But this is only one parameter. We can also tune `answer` and `section`
 together with `question`.
@@ -77,6 +85,11 @@ results = []
 for question_boost in [1.0, 2.0, 5.0]:
     for answer_boost in [1.0, 2.0, 4.0, 10.0]:
         for section_boost in [0.1, 0.2, 0.5]:
+            print(
+                f"Evaluating question_boost={question_boost},"
+                f" answer_boost={answer_boost},"
+                f" section_boost={section_boost}..."
+            )
             result = evaluate(
                 ground_truth,
                 lambda query, question_boost=question_boost, answer_boost=answer_boost, section_boost=section_boost: search_boosts(
@@ -119,9 +132,11 @@ question  answer  section  hit_rate  mrr
 1.0       4.0     0.1      0.970     0.862
 ```
 
-The question-only experiment showed that `question_boost=1.0` was best
-when `answer` wasn't boosted. The grid search shows that the best
-combination is different once we tune the fields together.
+The best combination weights `answer` twice as heavily as `question`,
+with almost no weight on `section`. So the data says the opposite of
+where we started. The answer text matters more for retrieval than the
+question text. The intuition was wrong, and we'd never have known without
+measuring it. This is exactly why we evaluate instead of guess.
 
 The first three rows have the same relative weights:
 
@@ -166,6 +181,21 @@ Grid search is fine when there are only a few settings. For a larger
 parameter space, use a smarter search strategy. You can sample random
 combinations, use Bayesian optimization, or keep a validation split so
 you don't overfit the evaluation set.
+
+For text search on our dataset, grid search takes about one second per
+combination. That makes it practical to try many options. When each
+evaluation takes minutes instead of seconds, grid search becomes too
+expensive. In those cases, use Bayesian optimization with a library like
+hyperopt. It explores the parameter space more efficiently by focusing
+on combinations that are likely to improve the metric.
+
+## Top-K tradeoffs
+
+We return 5 results from search. Increasing top-K to 10 would improve
+hit rate because there are more chances to find the correct document.
+But more results means more context sent to the LLM. That costs more
+and makes it harder for the model to identify what is relevant. Five
+results is a reasonable default for short FAQ-style documents.
 
 Next, we'll move from retrieval quality to answer quality and evaluate
 the full RAG pipeline.

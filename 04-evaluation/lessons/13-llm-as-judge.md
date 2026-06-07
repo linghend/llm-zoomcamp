@@ -1,5 +1,7 @@
 # LLM as a Judge
 
+Video: [Watch this lesson](https://www.youtube.com/watch?v=BEXVULgalDM&list=PL3MmuxUbc_hLZFNgSad56pDBKK8KO0XIv)
+
 In the previous lesson, we generated RAG answers for our ground truth
 questions. Now we need to decide whether these answers are good enough.
 
@@ -273,6 +275,24 @@ These rows are often the most useful part of the evaluation. They can
 show that search retrieved the wrong document. They can also show that
 the answer is too generic. Sometimes the RAG pipeline says that it
 doesn't know even though the FAQ had the answer.
+
+## Evaluating the judge
+
+The judge can be wrong. It may rate an answer as good even though search
+failed to retrieve the right document. In that case the judge is too
+lenient. Make the instructions stricter and re-run the evaluation.
+
+To evaluate the judge, you need to look at the results yourself. Sample
+some good and bad cases, read the judge reasoning, and check whether you
+agree with the verdict. You cannot use another judge to evaluate the
+judge. This is manual work, but it is necessary.
+
+A practical approach is to build a simple application with Streamlit.
+Show each question, the original answer, the generated answer, and the
+judge verdict side by side. Then mark each verdict as correct or
+incorrect and use that feedback to adjust the judge instructions. This
+is a lot of trial and error, but it makes the evaluation framework more
+reliable.
 
 ## Saving the results
 
