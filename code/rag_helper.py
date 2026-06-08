@@ -20,7 +20,7 @@ CONTEXT:
 class RAGBase:
     def __init__(
         self,
-        index,  #need by search()
+        index,  #needed by search()
         llm_client,  # needed by llm() from rag()
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
