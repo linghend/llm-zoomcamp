@@ -7,7 +7,6 @@ Flows: [flows/](flows/)
 
 Each lesson has its own video link at the top. If you'd like to watch them all in order, the [full playlist is here](https://youtube.com/playlist?list=PLEK3H8YwZn1oc6ReY4el9jT-mLlw-hs3r&si=yLtndNW5lhFcVuUJ).
 
-
 ## Part 1: Using AI in Workflows
 
 The first three lessons cover the theory behind using AI reliably in workflows — why context matters, why generic AI assistants fail, and how to set up your environment.
@@ -46,6 +45,11 @@ Part 5 covers what you need to know before going to production - cost, security,
 
 8. [Best Practices](lessons/08-best-practices.md) - Cost, security, observability, and production readiness
 9. [Next Steps](lessons/09-next-steps.md) - Resources, further reading, and where to go from here
+
+
+## Homework
+
+- [Homework](../cohorts/2026/03-orchestration/homework.md)
 
 
 ## Extra Resources
